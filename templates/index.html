@@ -1,0 +1,122 @@
+<!doctype html><html lang="fa" dir="rtl"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>OpenSSH + WS Panel</title><link rel="stylesheet" href="/static/app.css"></head>
+<body><div class="grid-bg"></div><div class="glow one"></div><div class="glow two"></div>
+<main class="shell">
+<header class="header glass"><div class="brand"><div class="logo">CP</div><div>
+<span class="eyebrow">CUSTOM PANEL</span><h1>OpenSSH + WebSocket Control Center</h1></div></div>
+<div class="header-actions"><a class="btn success" href="/backup/download">دانلود بکاپ</a><a class="btn secondary" href="/logout">خروج</a></div></header>
+
+{% with messages=get_flashed_messages(with_categories=true) %}
+{% for category,message in messages %}<div class="notice {{category}}">{{message}}</div>{% endfor %}
+{% endwith %}
+
+<div class="tabs">
+<button type="button" class="tab-btn active" data-tab="dashboard" onclick="showTab('dashboard')">داشبورد</button>
+<button type="button" class="tab-btn" data-tab="admin" onclick="showTab('admin')">مدیریت پنل</button>
+</div>
+
+<div id="tab-dashboard" class="tab-panel active">
+
+<section class="stats">
+<article class="stat glass"><span>کل کاربران</span><strong id="total_users">0</strong></article>
+<article class="stat glass"><span>فعال</span><strong id="active_users">0</strong></article>
+<article class="stat glass"><span>آنلاین</span><strong id="online_users">0</strong></article>
+<article class="stat glass"><span>حجم کل</span><strong><b id="total_limit_gb">0</b> GB</strong></article>
+<article class="stat glass"><span>مصرف کل</span><strong id="total_used">0 B</strong></article>
+<article class="stat glass"><span>RAM</span><strong><b id="memory_percent">0</b>%</strong></article>
+</section>
+
+<section class="top-grid">
+<article class="panel glass full"><div class="panel-title"><div>
+<span class="eyebrow">CREATE USER</span><h2>ساخت کاربر</h2></div><span class="badge">SSH</span></div>
+<form action="/users" method="post" class="create-form">
+<input type="hidden" name="_csrf" value="{{csrf_token()}}">
+<label><span>نام کاربری</span><input name="username" required></label>
+<label><span>رمز عبور</span><input name="password" required></label>
+<label><span>حجم GB</span><input name="limit_gb" type="number" min="0" step="0.1" required></label>
+<label><span>زمان باقی‌مانده</span><input name="remaining_days" type="number" min="1" required></label>
+<div class="methods">
+<label><input type="checkbox" name="methods" value="tcp" checked><b>OpenSSH</b></label>
+<label><input type="checkbox" name="methods" value="ws" checked><b>SSH WebSocket</b></label>
+</div>
+<button class="btn primary full">ساخت کاربر</button></form></article>
+</section>
+
+<section class="users glass"><div class="users-head"><div>
+<span class="eyebrow">USERS</span><h2>مدیریت کاربران</h2></div>
+<div class="search"><span>⌕</span><input id="search" placeholder="جستجو..." oninput="filterRows()"></div>
+<a class="action" href="/users/export.csv">خروجی CSV</a></div>
+<div class="table-wrap"><table><thead><tr>
+<th>کاربر</th><th>روش‌ها</th><th>وضعیت</th><th>آنلاین</th><th>مصرف</th><th>زمان</th><th>عملیات</th>
+</tr></thead><tbody id="rows">
+{% for u in users %}
+<tr data-search="{{u.username|lower}}">
+<td><div class="user-cell"><div class="avatar">{{u.username[:1]|upper}}</div><div><strong>{{u.username}}</strong><small>ID #{{u.id}}</small></div></div></td>
+<td><div class="chips">{% if u.tcp_enabled %}<span class="chip cyan">OpenSSH : {{u.tcp_port}}</span>{% endif %}{% if u.ws_enabled %}<span class="chip purple">WS : {{u.ws_port}}</span>{% endif %}</div></td>
+<td>{% if u.paused %}<span class="status paused">متوقف</span>{% else %}<span class="status active">فعال</span>{% endif %}</td>
+<td><div class="online-stack">{% if u.tcp_enabled %}<span data-online-tcp="{{u.username}}" class="online">○ TCP</span>{% endif %}{% if u.ws_enabled %}<span data-online-ws="{{u.username}}" class="online">○ WS</span>{% endif %}</div></td>
+<td><div class="traffic"><strong><span data-used="{{u.username}}">{{u.used_human}}</span> / <span data-quota="{{u.username}}">{{u.limit_gb}} GB</span></strong><div class="progress"><i data-progress="{{u.username}}" style="width:{{u.percent}}%"></i></div></div></td>
+<td><span data-days="{{u.username}}" class="days">{{u.remaining_days}} روز</span></td>
+<td><div class="actions">
+<a class="action" href="/users/{{u.username}}/config">کانفیگ</a>
+{% if u.paused %}
+<form action="/users/{{u.username}}/resume" method="post"><input type="hidden" name="_csrf" value="{{csrf_token()}}"><button class="action success">فعال</button></form>
+{% else %}
+<form action="/users/{{u.username}}/pause" method="post"><input type="hidden" name="_csrf" value="{{csrf_token()}}"><button class="action warning">توقف</button></form>
+{% endif %}
+<details><summary class="action">ویرایش</summary><form action="/users/{{u.username}}/edit" method="post" class="edit-menu">
+<input type="hidden" name="_csrf" value="{{csrf_token()}}">
+<input name="password" placeholder="رمز جدید">
+<input name="limit_gb" type="number" min="0" step="0.1" value="{{u.limit_gb}}">
+<input name="remaining_days" type="number" min="0" value="{{u.remaining_days}}">
+<div class="methods">
+<label><input type="checkbox" name="methods" value="tcp" {% if u.tcp_enabled %}checked{% endif %}>OpenSSH</label>
+<label><input type="checkbox" name="methods" value="ws" {% if u.ws_enabled %}checked{% endif %}>WS</label>
+</div>
+<button class="btn primary">ذخیره</button></form></details>
+<form action="/users/{{u.username}}/reset-traffic" method="post"><input type="hidden" name="_csrf" value="{{csrf_token()}}"><button class="action secondary">ریست</button></form>
+<details><summary class="action">تمدید</summary><form action="/users/{{u.username}}/extend" method="post" class="edit-menu">
+<input type="hidden" name="_csrf" value="{{csrf_token()}}">
+<input name="days" type="number" min="1" placeholder="تعداد روز" required>
+<button class="btn primary">تمدید کن</button></form></details>
+<form action="/users/{{u.username}}/delete" method="post" onsubmit="return confirm('حذف شود؟')"><input type="hidden" name="_csrf" value="{{csrf_token()}}"><button class="action danger">حذف</button></form>
+</div></td></tr>
+{% endfor %}
+</tbody></table></div></section>
+</div>
+
+<div id="tab-admin" class="tab-panel">
+<section class="top-grid">
+<article class="panel glass"><div class="panel-title"><div>
+<span class="eyebrow">ADMIN</span><h2>تغییر ورود مدیر</h2></div><span class="badge purple">SECURE</span></div>
+<form action="/admin/credentials" method="post" class="stack">
+<input type="hidden" name="_csrf" value="{{csrf_token()}}">
+<input name="admin_username" placeholder="نام کاربری جدید مدیر" required>
+<input name="admin_password" type="password" minlength="10" placeholder="رمز جدید حداقل ۱۰ کاراکتر" required>
+<button class="btn primary">ذخیره و خروج</button>
+</form></article>
+
+<article class="panel glass"><div class="panel-title"><div>
+<span class="eyebrow">SECURITY</span><h2>تغییر پورت پنل</h2></div><span class="badge purple">فعلی: {{panel_port}}</span></div>
+<form action="/admin/port" method="post" class="stack">
+<input type="hidden" name="_csrf" value="{{csrf_token()}}">
+<input name="panel_port" type="number" min="1024" max="65535" placeholder="پورت جدید (مثلاً 443)" required>
+<button class="btn primary" onclick="return confirm('پس از تغییر، پنل روی پورت جدید بالا می‌آید و اتصال فعلی قطع می‌شود. ادامه بدم؟')">ذخیره و تغییر پورت</button>
+</form>
+<p class="help">بعد از تغییر پورت، آدرس جدید پنل: http(s)://آی‌پی‌یا‌دامنه:پورت‌جدید — فایروال به‌صورت خودکار برای پورت جدید باز می‌شود.</p></article>
+
+<article class="panel glass"><div class="panel-title"><div>
+<span class="eyebrow">BACKUP</span><h2>پشتیبان‌گیری و بازیابی</h2></div><span class="badge purple">JSON</span></div>
+<a class="btn success full" href="/backup/download">دانلود بکاپ</a>
+<hr style="border-color:var(--line);margin:14px 0">
+<form action="/backup/restore" method="post" enctype="multipart/form-data" class="stack">
+<input type="hidden" name="_csrf" value="{{csrf_token()}}">
+<div class="file-box"><input type="file" name="backup_file" accept=".json" required><span>انتخاب فایل بکاپ</span></div>
+<button class="btn primary">بازیابی بکاپ</button></form>
+<p class="help">کاربران، پورت‌ها، توکن WS، مصرف و زمان باقی‌مانده ذخیره می‌شوند.</p></article>
+</section>
+</div>
+
+</main>
+<script src="/static/app.js"></script></body></html>
