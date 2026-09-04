@@ -63,7 +63,7 @@ Requirements: a fresh Ubuntu/Debian VPS, and a domain/subdomain whose DNS
 
 ```bash
 export CUSTOM_PANEL_DOMAIN=panel.example.com   # must already resolve to this server
-curl -fsSL https://raw.githubusercontent.com/rima0222/ss/main/install.sh -o /tmp/install.sh
+curl -fsSL https://raw.githubusercontent.com/rima0222/s_final2/main/install.sh -o /tmp/install.sh
 bash -n /tmp/install.sh
 sudo -E bash /tmp/install.sh
 ```
